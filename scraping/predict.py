@@ -20,6 +20,8 @@ def backtest(data, model, predictors, start=2, step=1):
 
     seasons = sorted(data["season"].unique())
 
+    # trains model on seasons before the current season being iterated
+    # tests models on season after the current season of the loop
     for i in range(start, len(seasons), step):
         season = seasons[i]
         train = data[data["season"] < season]
@@ -64,12 +66,17 @@ if __name__ == '__main__':
     from sklearn.linear_model import RidgeClassifier
     from sklearn.feature_selection import SequentialFeatureSelector
     from sklearn.model_selection import TimeSeriesSplit
+    from sklearn.ensemble import RandomForestClassifier
+
+    # rfc = RandomForestClassifier(ccp_alpha=1)
 
     rr = RidgeClassifier(alpha=1)
 
     split = TimeSeriesSplit(n_splits=3)
 
-    sfs = SequentialFeatureSelector(rr,n_features_to_select=30,direction="forward",cv=split, n_jobs=1)
+    # can change the number of features to select to train model
+    # can also change the direction to forward or backward
+    sfs = SequentialFeatureSelector(rr,n_features_to_select=30,direction="backward",cv=split, n_jobs=1)
 
     removed_columns = ["season", "date", "won", "target", "team", "team_opp"]
     selected_columns = df.columns[~df.columns.isin(removed_columns)]
@@ -92,13 +99,15 @@ if __name__ == '__main__':
 
 
     #the predictions tells us the actual and prediction for each of the columns
-    #we dont want to look through the entire table so we use metric acturacy score
+    #we dont want to look through the entire table so we use metric accuracy score
 
 
     from sklearn.metrics import accuracy_score
 
-    # gives accuracy prediction was right in percentage
-    print(accuracy_score(predictions["actual"], predictions["prediction"]))
+    # gives accuracy prediction - percent of time the model predicted correctly
+    # this is the baseline score without any changes or additions to the dataset -- we will add 10 game avg, and feature select on more than 10 features
+    original_score = accuracy_score(predictions["actual"], predictions["prediction"])
+    print("original prediction: " + str(original_score))
 
     #group acuraccy by the home column and apply function what % of the time the team wins based on wether they are home or not
     df.groupby(["home"]).apply(lambda x: x[x["won"] == 1].shape[0] / x.shape[0])
@@ -137,12 +146,13 @@ if __name__ == '__main__':
     selected_columns = full.columns[~full.columns.isin(removed_columns)]
     sfs.fit(full[selected_columns], full["target"])
 
-    #these are the selected columns from the feature selector
+    #these are the selected columns from the feature selector -- gives us insight into what may be the most important stats in predicting a game
     predictors = list(selected_columns[sfs.get_support()])
 
     predictions = backtest(full, rr, predictors)
 
-    print(accuracy_score(predictions["actual"], predictions["prediction"]))
+    modified_prediction = accuracy_score(predictions["actual"], predictions["prediction"])
+    print("Modified prediction: " + str(modified_prediction))
 
     #we used a ridge regression model but we could try to use more powerful model to improve accuracy
     #use xgboost or randomforestclassifier instead of ridgeClassifier
